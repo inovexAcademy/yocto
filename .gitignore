@@ -1,0 +1,16 @@
+build
+build/*
+!layers/meta-inovex
+layers/meta-flutter
+layers/meta-mender
+layers/meta-mender-raspberrypi
+layers/meta-openembedded
+layers/meta-raspberrypi
+layers/meta-virtualization
+layers/openembedded-core
+layers/meta-arm
+layers/meta-bsp-imx8mm
+layers/meta-compulab-bsp
+layers/meta-freescale
+layers/meta-imx
+

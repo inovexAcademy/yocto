@@ -1,0 +1,16 @@
+header:
+  version: 18
+  includes:
+    - config/base.yml
+    - config/raspberrypi.yml
+
+
+local_conf_header:
+  raspberrypi4: |
+    # display backlight kernel module
+    RPI_KERNEL_DEVICETREE_OVERLAYS:append = " overlays/rpi-backlight.dtbo"
+    # set rotation for offical pi display
+    RPI_EXTRA_CONFIG += 'lcd_rotate=2'
+
+machine: raspberrypi4-64
+

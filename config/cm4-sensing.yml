@@ -1,0 +1,18 @@
+header:
+  version: 18
+  includes:
+    - config/base.yml
+    - config/raspberrypi.yml
+
+
+local_conf_header:
+  cm4-senseing: |
+    # display backlight kernel module
+    RPI_KERNEL_DEVICETREE_OVERLAYS:append = " overlays/rpi-backlight.dtbo"
+    VC4DTBO = "vc4-fkms-v3d"
+    CMDLINE:prepend = "console=ttyS0,115200 console=tty0 "
+    RPI_EXTRA_CONFIG += '\notg_mode=1'
+
+
+machine: cm4-sensing
+
