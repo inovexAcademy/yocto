@@ -3,18 +3,9 @@ stages:
   - sign
 
 .setup_build:
-    image: ghcr.io/siemens/kas/kas:4.7
-    variables:
-      KAS_SSH_DIR: "${PWD}/deploy-key"
-      KAS_SSH_AUTH_SOCK: $(readlink -fv "$SSH_AUTH_SOCK")
+    image: ghcr.io/siemens/kas/kas:5.0
     tags:
-        - local_cache
-    before_script:
-        - eval $(ssh-agent -s)
-        - cat deploy-key/deploy-key | tr -d '\r' | ssh-add -
-        - mkdir -p ~/.ssh
-        - chmod 700 ~/.ssh
-        - ssh-keyscan -p 2424 gitlab.inovex.de >> ~/.ssh/known_hosts
+        - yocto-ics
     artifacts:
         expire_in: 3 mos
         paths:
@@ -71,15 +62,15 @@ build_rpi3_release:
   variables:
     DEVICE_YAML:    "raspberrypi3.yml"
 
-sign_mender_artifact:
-    image: ghcr.io/siemens/kas/kas:4.7
-    tags:
-        - local_cache
-    stage: sign
-    script:
-        - sign/sign.sh "build/tmp-glibc/deploy/images" "${ARTIFACT_SIGN_KEY}"
-    artifacts:
-        expire_in: 1 mos
-        paths:
-            - sign/signed_output
+# sign_mender_artifact:
+#     image: ghcr.io/siemens/kas/kas:5.0
+#     tags:
+#         - yocto-ics
+#     stage: sign
+#     script:
+#         - sign/sign.sh "build/tmp-glibc/deploy/images" "${ARTIFACT_SIGN_KEY}"
+#     artifacts:
+#         expire_in: 1 mos
+#         paths:
+#             - sign/signed_output
 
