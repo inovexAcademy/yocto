@@ -1,0 +1,11 @@
+header:
+  version: 19
+  includes:
+    - config/base.yml
+    - config/raspberrypi.yml
+
+
+# Preconfigured QEMU machine definitions for several architectures
+# openembedded-core/meta/conf/machine
+machine: raspberrypi4-qemu
+
