@@ -28,3 +28,4 @@ local_conf_header:
     # scarthgap. Raspberry Pi did not update 6.6.x for 8 months (state 2025-11)
     # so it is better to switch for 6.12 manually.
     PREFERRED_VERSION_linux-raspberrypi = "6.12.%"
+

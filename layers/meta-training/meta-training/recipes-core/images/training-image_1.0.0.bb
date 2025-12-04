@@ -22,7 +22,7 @@ IMAGE_INSTALL:remove = " \
 "
 
 IMAGE_FEATURES:append = " \
-    \
+    read-only-rootfs \
 "
 
 IMAGE_FSTYPES:remove = " \
@@ -37,4 +37,3 @@ ROOTFS_POSTPROCESS_COMMAND += "replace_something;"
 IMAGE_LINGUAS = "de-de"
 
 inherit core-image
-require recipes-core/images/tpm2-slb9670.inc
