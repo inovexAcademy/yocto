@@ -1,0 +1,19 @@
+header:
+  version: 19
+  includes:
+    - config/base.yml
+    - config/emu.yml
+    - config/debug.yml
+
+local_conf_header:
+  testimage-requirements: |
+    IMAGE_INSTALL:append = " avahi-daemon"
+    DISTRO_FEATURES:append = " minidebuginfo"
+
+  testimage: |
+    IMAGE_CLASSES += "testimage"
+    TEST_TARGET = "qemu"
+    TEST_SUITES = "ping ssh systemd parselogs df syslog date dmesg mytest"
+
+  automatically-running-tests: |
+    TESTIMAGE_AUTO = "1"

@@ -1,0 +1,12 @@
+header:
+  version: 19
+  includes:
+    - config/base.yml
+    - config/emu.yml
+    - config/debug.yml
+
+local_conf_header:
+  ptest-requirements: |
+    DISTRO_FEATURES += "ptest"
+    EXTRA_IMAGE_FEATURES += "ptest-pkgs"
+    IMAGE_FEATURES:remove = "read-only-rootfs"
