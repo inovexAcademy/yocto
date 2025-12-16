@@ -5,12 +5,6 @@ LICENSE = "MIT | Apache-2.0"
 LIC_FILE_CHKSUM = ""
 
 
-replace_something() {
-}
-
-ROOTFS_POSTPROCESS_COMMAND += "replace_something;"
-
-
 IMAGE_INSTALL = "packagegroup-core-boot ${CORE_IMAGE_EXTRA_INSTALL}"
 
 IMAGE_INSTALL:append = " \
@@ -37,3 +31,4 @@ ROOTFS_POSTPROCESS_COMMAND += "replace_something;"
 IMAGE_LINGUAS = "de-de"
 
 inherit core-image
+
