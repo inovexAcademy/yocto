@@ -1,0 +1,19 @@
+header:
+  version: 21
+  includes:
+    - config/base.yml
+
+repos:
+  meta-training-dhsom-stm32-bsp:
+    path: layers/meta-training/meta-training-dhsom-stm32-bsp
+
+  meta-mainline-common:
+    url: https://source.denx.de/denx/meta-mainline-common.git
+    path: layers/meta-mainline-common
+
+  meta-dhsom-stm32-bsp:
+    url: https://github.com/dh-electronics/meta-dhsom-stm32-bsp.git
+    path: layers/meta-dhsom-stm32-bsp
+
+machine: dh-stm32mp1-dhcor-avenger96
+

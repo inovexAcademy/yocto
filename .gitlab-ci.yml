@@ -3,7 +3,7 @@ stages:
   - sign
 
 .setup_build:
-    image: ghcr.io/siemens/kas/kas:5.0
+    image: ghcr.io/siemens/kas/kas:5.2
     tags:
         - yocto-ics
     artifacts:
@@ -63,7 +63,7 @@ build_rpi3_release:
     DEVICE_YAML:    "raspberrypi3.yml"
 
 # sign_mender_artifact:
-#     image: ghcr.io/siemens/kas/kas:5.0
+#     image: ghcr.io/siemens/kas/kas:5.2
 #     tags:
 #         - yocto-ics
 #     stage: sign

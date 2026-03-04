@@ -1,5 +1,5 @@
 header:
-  version: 18
+  version: 21
 
 distro: training-distro
 target:
@@ -15,7 +15,6 @@ repos:
     path: "layers/meta-training"
     layers:
       meta-training:
-      meta-training-bsp:
       meta-training-distro:
 
   meta-mender:
@@ -23,6 +22,7 @@ repos:
     path: "layers/meta-mender"
     layers:
       meta-mender-core:
+      meta-mender-demo: disabled
 
   meta-openembedded:
     url: https://git.openembedded.org/meta-openembedded

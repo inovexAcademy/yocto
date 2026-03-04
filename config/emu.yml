@@ -3,12 +3,6 @@ header:
   includes:
     - config/base.yml
 
-repos:
-  meta-training:
-    path: "layers/meta-training"
-    layers:
-      meta-training-bsp: disabled
-
 # Preconfigured QEMU machine definitions for several architectures
 # openembedded-core/meta/conf/machine
 machine: qemuarm64

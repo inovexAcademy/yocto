@@ -2,6 +2,9 @@ header:
   version: 19
 
 repos:
+  meta-training-rpi-bsp:
+    path: layers/meta-training/meta-training-rpi-bsp
+
   meta-raspberrypi:
     url: https://github.com/agherzan/meta-raspberrypi.git
     path: "layers/meta-raspberrypi"
