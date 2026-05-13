@@ -15,6 +15,7 @@ repos:
     path: "layers/meta-training"
     layers:
       meta-training:
+        prio: 10
       meta-training-distro:
 
   meta-mender:
@@ -22,7 +23,12 @@ repos:
     path: "layers/meta-mender"
     layers:
       meta-mender-core:
+        prio: 5
       meta-mender-demo: disabled
+
+  meta-vulnscout:
+    url: https://github.com/savoirfairelinux/meta-vulnscout.git
+    path: "layers/meta-vulnscout"
 
   meta-openembedded:
     url: https://git.openembedded.org/meta-openembedded
