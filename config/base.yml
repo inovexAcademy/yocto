@@ -8,7 +8,7 @@ target:
 
 defaults:
   repos:
-    branch: scarthgap
+    branch: wrynose
 
 repos:
   meta-training:
@@ -21,6 +21,7 @@ repos:
   meta-mender:
     url: https://github.com/mendersoftware/meta-mender.git
     path: "layers/meta-mender"
+    branch: master-next
     layers:
       meta-mender-core:
         prio: 5
@@ -48,7 +49,7 @@ repos:
   bitbake:
     url: https://github.com/openembedded/bitbake
     path: layers/openembedded-core/bitbake
-    branch: "2.8"
+    branch: "2.18"
     layers:
       bitbake: disabled
 
@@ -66,5 +67,5 @@ local_conf_header:
 
   mender-base: |
     CONF_VERSION = "2"
-    MENDER_ARTIFACT_NAME = "scarthgap-date"
+    MENDER_ARTIFACT_NAME = "wrynose-date"
 
