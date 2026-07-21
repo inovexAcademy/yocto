@@ -2,7 +2,7 @@ build
 build/*
 
 .kas_shell_history
-.vscode
+!.vscode
 
 layers/*
 

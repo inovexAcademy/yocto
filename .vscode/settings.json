@@ -1,0 +1,49 @@
+{
+    "python.autoComplete.extraPaths": [
+        "${workspaceFolder}/layers/openembedded-core/bitbake/lib",
+        "${workspaceFolder}/layers/openembedded-core/meta/lib"
+    ],
+    "python.analysis.extraPaths": [
+        "${workspaceFolder}/layers/openembedded-core/bitbake/lib",
+        "${workspaceFolder}/layers/openembedded-core/meta/lib"
+    ],
+    "bitbake.loggingLevel": "info",
+    "bitbake.pathToBitbakeFolder": "${workspaceFolder}/layers/openembedded-core/bitbake",
+    "bitbake.pathToBuildFolder": "${workspaceFolder}/build",
+    "bitbake.pathToEnvScript": "",
+    "bitbake.shellEnv": {},
+    "files.associations": {
+        "*.conf": "bitbake",
+        "*.inc": "bitbake"
+    },
+    "bitbake.buildConfigurations": [
+        {
+            "name": "Avenger96",
+            "commandWrapper": "kas shell config/avenger96.yml:config/debug.yml -c"
+        },
+        {
+            "name": "QEMU Arm64",
+            "commandWrapper": "kas shell config/emu.yml:config/debug.yml -c"
+        },
+        {
+            "name": "QEMU Raspberry Pi4",
+            "commandWrapper": "kas shell config/emu-rpi4.yml:config/debug.yml -c"
+        },
+        {
+            "name": "Raspberry Pi4 CM",
+            "commandWrapper": "kas shell config/raspberrypi4cm.yml:config/debug.yml -c"
+        },
+        {
+            "name": "Raspberry Pi3",
+            "commandWrapper": "kas shell config/raspberrypi3.yml:config/debug.yml -c"
+        },
+        {
+            "name": "Testimage",
+            "commandWrapper": "kas shell config/testimage.yml -c"
+        },
+        {
+            "name": "Ptest-Image",
+            "commandWrapper": "kas shell config/ptest-image.yml -c"
+        }
+    ]
+}

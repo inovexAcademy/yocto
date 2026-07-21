@@ -1,0 +1,31 @@
+{
+    "image": "ghcr.io/siemens/kas/kas:5.4",
+    "containerEnv": {
+        "DISPLAY": ":0"
+    },
+    "capAdd": [
+        "NET_ADMIN"
+    ],
+    "workspaceMount": "source=${localWorkspaceFolder},target=/work,type=bind",
+    "workspaceFolder": "/work",
+    "remoteUser": "builder",
+
+    "postCreateCommand": "kas checkout config/avenger96.yml && kas checkout config/emu-rpi4.yml && kas checkout config/emu.yml && kas checkout config/raspberrypi3.yml && kas checkout config/raspberrypi4cm.yml",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "mads-hartmann.bash-ide-vscode",
+                "yocto-project.yocto-bitbake",
+                "ms-python.python"
+            ],
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash",
+                "terminal.integrated.profiles.linux": {
+                    "bash": {
+                        "path": "/bin/bash"
+                    }
+                }
+            }
+        }
+    }
+}
