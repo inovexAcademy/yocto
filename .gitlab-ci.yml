@@ -1,6 +1,7 @@
 stages:
   - build
-  - sign
+  - publish_sbom
+  - cve_scan
 
 .setup_build:
     image: ghcr.io/siemens/kas/kas:5.4
@@ -29,6 +30,96 @@ stages:
         - kas build config/${DEVICE_YAML}
         - echo "Yocto build finished."
 
+.scan_vulnscout:
+  stage: cve_scan
+  tags:
+    - yocto-ics
+  image:
+    name: sflinux/vulnscout:v0.18
+    entrypoint: [""]
+  variables:
+    PROJECT_NAME: $CI_PROJECT_NAME
+    VARIANT_NAME: default
+    OUTPUTS_DIR: $CI_PROJECT_DIR/vulnscout-outputs
+    VULNSCOUT_OUTPUTS_DIR: $CI_PROJECT_DIR/vulnscout-outputs
+    NVD_API_KEY: $NVDCVE_API_KEY
+    # Must be defined by the inheriting job:
+    SPDX_FILE: ""
+    SBOM_CVE_CHECK_FILE: ""
+  cache:
+    key: vulnscout-vulnerability-db
+    paths:
+      - .vulnscout-cache/
+  before_script:
+    - mkdir -p "$OUTPUTS_DIR"
+    - mkdir -p "$CI_PROJECT_DIR/.vulnscout-cache"
+    # Symlink VulnScout's internal cache folder to the GitLab runner workspace folder
+    # so that downloaded vulnerability databases persist across pipeline runs:
+    - rm -rf /cache/vulnscout
+    - ln -s "$CI_PROJECT_DIR/.vulnscout-cache" /cache/vulnscout
+    # Limit Go's allowed RAM consumption in order to avoid OOM killing grype scans
+    - export GOMEMLIMIT="24GiB"
+  script:
+    - echo "Starting standalone VulnScout scan for ${PROJECT_NAME} (${VARIANT_NAME})..."
+    - echo "Using ${CI_PROJECT_DIR}/${SPDX_FILE} as input."
+    - ls -l "${CI_PROJECT_DIR}/${SPDX_FILE}"
+
+    - |
+      /scan/src/entrypoint.sh \
+      --project "${PROJECT_NAME}" \
+      --variant "${VARIANT_NAME}" \
+      --add-spdx "${CI_PROJECT_DIR}/${SPDX_FILE}" \
+      --add-cve-check "${CI_PROJECT_DIR}/${SBOM_CVE_CHECK_FILE}"
+
+    - |
+      /scan/src/entrypoint.sh \
+      --project "${PROJECT_NAME}" \
+      --variant "${VARIANT_NAME}" \
+      --perform-nvd-scan
+
+    - |
+      /scan/src/entrypoint.sh \
+      --project "${PROJECT_NAME}" \
+      --variant "${VARIANT_NAME}" \
+      --perform-osv-scan
+
+    - |
+      /scan/src/entrypoint.sh \
+      --project "${PROJECT_NAME}" \
+      --variant "${VARIANT_NAME}" \
+      --perform-sbom-cve-check-scan
+
+    # Disable grype due to current issues with the grype cli tool
+    # (excessive memory consumption)
+    # - |
+    #   /scan/src/entrypoint.sh \
+    #   --project "${PROJECT_NAME}" \
+    #   --variant "${VARIANT_NAME}" \
+    #   --perform-grype-scan
+
+    - |
+      /scan/src/entrypoint.sh \
+      --project "${PROJECT_NAME}" \
+      --variant "${VARIANT_NAME}" \
+      --export-spdx \
+      --export-cdx \
+      --export-openvex \
+      --report all_assessments.adoc \
+      --report match_condition.adoc \
+      --report summary.adoc \
+      --report time_estimates.csv \
+      --report vulnerabilities.csv \
+      --report vulnerability_summary.txt
+
+  artifacts:
+    expire_in: 90 days
+    when: always
+    paths:
+      - vulnscout-outputs/
+      # It would be useful to make the vulnscout directories generally
+      # available in order to start the vulnscout container based on the
+      # already existing databases for regulary reports on existing releases
+      # and maybe even examining the web UI.
 
 build_rpi3_debug:
   extends: .build_yocto
@@ -62,15 +153,75 @@ build_rpi3_release:
   variables:
     DEVICE_YAML:    "raspberrypi3.yml"
 
-# sign_mender_artifact:
-#     image: ghcr.io/siemens/kas/kas:5.2
-#     tags:
-#         - yocto-ics
-#     stage: sign
-#     script:
-#         - sign/sign.sh "build/tmp/deploy/images" "${ARTIFACT_SIGN_KEY}"
-#     artifacts:
-#         expire_in: 1 mos
-#         paths:
-#             - sign/signed_output
+publish_sbom:
+  stage: publish_sbom
+  tags:
+    - yocto-ics
+  image: curlimages/curl:latest
+  needs:
+    - job: build_rpi3_release
+      artifacts: true
+  rules:
+    # Only run on tags (releases)
+    - if: $CI_COMMIT_TAG != null
+      when: on_success
+  variables:
+    PACKAGE_VERSION: $CI_COMMIT_TAG
+    PACKAGE_NAME: "rpi3-sboms"
+    SPDX_FILE: "build/tmp/deploy/images/*/*.spdx.json"
+    SBOM_CVE_CHECK_FILE: "build/tmp/deploy/images/*/*.sbom-cve-check.spdx.json"
+    REGISTRY_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${PACKAGE_NAME}/${PACKAGE_VERSION}"
+  script:
+    - echo "Uploading SBOMs to Generic Package Registry for release ${PACKAGE_VERSION}..."
+    - |
+      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file "${SPDX_FILE}" "${REGISTRY_URL}/training-image.spdx.json"
+    - |
+      curl --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file "${SBOM_CVE_CHECK_FILE}" "${REGISTRY_URL}/training-image.sbom-cve-check.spdx.json"
+    - echo "Upload complete."
 
+cve_scan:
+  extends: .scan_vulnscout
+  # We do not need the build job here, as we download the artifacts
+  needs: []
+  rules:
+    # Trigger only via Pipeline Schedules
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_COMMIT_TAG != null
+      when: on_success
+    - when: manual
+
+  # Native GitLab CI Matrix:
+  # GitLab will spawn a separate job instance for each tag in this array.
+  # To add or remove releases to be scanned, simply update this list.
+  parallel:
+    matrix:
+      - TARGET_RELEASE_VERSION:
+        - "v0.0.1"
+        # - "v1.1.0"
+        # - "v2.0.0"
+
+  variables:
+    PROJECT_NAME: "rpi3"
+    VARIANT_NAME: $TARGET_RELEASE_VERSION
+    PACKAGE_NAME: "rpi3-sboms"
+    REGISTRY_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${PACKAGE_NAME}/${TARGET_RELEASE_VERSION}"
+    SPDX_FILE: "training-image*.spdx.json"
+    SBOM_CVE_CHECK_FILE: "training-image*.sbom-cve-check.spdx.json"
+
+  before_script:
+    # Run the parent before_script (cache setup, limits)
+    - !reference [.scan_vulnscout, before_script]
+    # Ensure curl is available
+    - apt-get update && apt-get install -y curl || apk add --no-cache curl || true
+
+    # Download the SBOMs from the Generic Package Registry for the specific matrix version
+    - echo "Downloading SBOMs for release ${TARGET_RELEASE_VERSION}..."
+    - |
+      curl --fail --silent --show-error --header "JOB-TOKEN: ${CI_JOB_TOKEN}" "${REGISTRY_URL}/training-image.spdx.json"
+      --output "${CI_PROJECT_DIR}/${SPDX_FILE}"
+
+    - |
+      curl --fail --silent --show-error --header "JOB-TOKEN: ${CI_JOB_TOKEN}" "${REGISTRY_URL}/training-image.sbom-cve-check.spdx.json"
+      --output "${CI_PROJECT_DIR}/${SBOM_CVE_CHECK_FILE}"
+
+    - echo "Download complete. Passing to VulnScout..."
