@@ -4,4 +4,5 @@ header:
 local_conf_header:
   debug-conf: |
     IMAGE_FEATURES += "allow-empty-password allow-root-login empty-root-password post-install-logging"
-
+    INHERIT:remove = "create-spdx"
+    IMAGE_CLASSES:remove = "sbom-cve-check"

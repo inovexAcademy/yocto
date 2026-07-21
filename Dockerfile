@@ -1,5 +1,5 @@
 # Extend the original KAS container
-FROM ghcr.io/siemens/kas/kas:5.2
+FROM ghcr.io/siemens/kas/kas:5.4
 
 USER root
 

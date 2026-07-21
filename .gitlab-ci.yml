@@ -9,9 +9,9 @@ stages:
     artifacts:
         expire_in: 3 mos
         paths:
-            - build/tmp-glibc/deploy/images/*/*.sdimg
-            - build/tmp-glibc/deploy/images/*/*.mender
-            - build/tmp-glibc/deploy/images/*/*.spdx*
+            - build/tmp*/deploy/images/*/*.sdimg
+            - build/tmp*/deploy/images/*/*.mender
+            - build/tmp*/deploy/images/*/*.spdx*
 
 .build_yocto:
     extends: .setup_build
@@ -68,7 +68,7 @@ build_rpi3_release:
 #         - yocto-ics
 #     stage: sign
 #     script:
-#         - sign/sign.sh "build/tmp-glibc/deploy/images" "${ARTIFACT_SIGN_KEY}"
+#         - sign/sign.sh "build/tmp/deploy/images" "${ARTIFACT_SIGN_KEY}"
 #     artifacts:
 #         expire_in: 1 mos
 #         paths:

@@ -18,19 +18,6 @@ repos:
         prio: 10
       meta-training-distro:
 
-  meta-mender:
-    url: https://github.com/mendersoftware/meta-mender.git
-    path: "layers/meta-mender"
-    branch: master-next
-    layers:
-      meta-mender-core:
-        prio: 5
-      meta-mender-demo: disabled
-
-  meta-vulnscout:
-    url: https://github.com/savoirfairelinux/meta-vulnscout.git
-    path: "layers/meta-vulnscout"
-
   meta-openembedded:
     url: https://git.openembedded.org/meta-openembedded
     path: "layers/meta-openembedded"
@@ -54,6 +41,24 @@ repos:
       bitbake: disabled
 
 local_conf_header:
+  oe-config-fragments: |
+    # OE_FRAGMENTS
+    # Yocto's new fragments concept is pretty cool and great, but
+    # `addfragments` picks up fragments before the distro is parsed.
+    # For the most currently available fragments, the distro
+    # is one logical place to use them, while taking advantage of
+    # the shared and maintained config fragment.
+    # Until this issue is fixed, generally enabled fragments are added
+    # here for now:
+
+    # Utilize Yocto's SBoM CVE checker
+    require conf/distro/include/cve-extra-exclusions.inc
+    OE_FRAGMENTS += "core/yocto/sbom-cve-check"
+    SBOM_CVE_CHECK_EXTRA_ARGS += "--sbom-path ${DEPLOY_DIR_IMAGE}/${IMAGE_LINK_NAME}.spdx.json"
+
+    # Use prebuilt sstate artifacts for standard Yocto build configurations:
+    # OE_FRAGMENTS += "core/yocto/sstate-mirror-cdn"
+
   diskmon: |
     BB_DISKMON_DIRS ??= "\
     STOPTASKS,${TMPDIR},1G,100K \

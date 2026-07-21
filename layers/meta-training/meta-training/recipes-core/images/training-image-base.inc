@@ -4,15 +4,9 @@ HOMEPAGE = "www.inovex.de"
 LICENSE = "MIT | Apache-2.0"
 LIC_FILE_CHKSUM = ""
 
-
-IMAGE_INSTALL = "packagegroup-core-boot ${CORE_IMAGE_EXTRA_INSTALL}"
+IMAGE_INSTALL = "packagegroup-core-boot"
 
 IMAGE_INSTALL:append = " \
-    openssh \
-    vim \
-"
-
-IMAGE_INSTALL:remove = " \
 "
 
 IMAGE_FEATURES:append = " \
@@ -28,7 +22,8 @@ replace_something() {
 
 ROOTFS_POSTPROCESS_COMMAND += "replace_something;"
 
-IMAGE_LINGUAS = "de-de"
+IMAGE_LINGUAS = ""
+GLIBC_GENERATE_LOCALES = ""
+
 
 inherit core-image
-
