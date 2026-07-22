@@ -72,5 +72,5 @@ local_conf_header:
 
   mender-base: |
     CONF_VERSION = "2"
-    MENDER_ARTIFACT_NAME = "wrynose-date"
+    MENDER_ARTIFACT_NAME = "YOCTO_RELEASE"
 
