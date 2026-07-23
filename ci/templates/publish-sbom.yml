@@ -1,0 +1,68 @@
+# ===========================================================================
+# SBOM publishing template
+#
+# Uploads every SPDX/SBOM file produced by the release build to the project's
+# Generic Package Registry under ${PACKAGE_NAME}/${PACKAGE_VERSION}.
+#
+# COUPLING NOTE: the file names created here are consumed 1:1 by the cve_scan
+# jobs. The SPDX <-> CVE-check pairing in cve_scan relies on the
+# ".spdx.json" / ".sbom-cve-check.spdx.json" suffixes being preserved, and the
+# SPDX base name is reused as the VulnScout variant identifier, so do NOT
+# rewrite the file names when changing the upload naming below.
+# ===========================================================================
+.publish_sbom:
+  stage: publish_sbom
+  tags:
+    - yocto-ics
+  image: curlimages/curl:latest
+  rules:
+    # Only run on tags (releases)
+    - if: $CI_COMMIT_TAG != null
+      when: on_success
+  variables:
+    PACKAGE_VERSION: $CI_COMMIT_TAG
+    # PACKAGE_NAME is provided by the device template.
+    REGISTRY_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${PACKAGE_NAME}/${PACKAGE_VERSION}"
+  script:
+    - echo "Searching for SPDX/SBOM files under build/tmp*/deploy/images/*/..."
+    - |
+      set -eu
+      # curl cannot expand shell wildcards, so we expand the glob ourselves
+      # in a for loop and upload every matching file individually.
+      # "*.spdx.json" intentionally also matches "*.sbom-cve-check.spdx.json" -
+      # we want to upload all of these anyway.
+      #
+      # The Yocto SPDX base name already encodes image + machine and is unique,
+      # so we upload it under its own name without any extra prefix. This base
+      # name is also what cve_scan uses as the VulnScout variant identifier.
+      upload_count=0
+      skipped_count=0
+      for f in build/tmp*/deploy/images/*/*.spdx.json; do
+        [ -e "$f" ] || continue
+        target_name="$(basename "$f")"
+
+        case "$target_name" in
+          # <...>-<14-digit timestamp>.spdx.json
+          *-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].spdx.json) ;;
+          # <...>-<14-digit timestamp>.sbom-cve-check.spdx.json
+          *-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].sbom-cve-check.spdx.json) ;;
+          *)
+            echo "Skipping non-timestamped entry (symlink to an original): ${target_name}"
+            skipped_count=$((skipped_count + 1))
+            continue
+            ;;
+        esac
+
+        echo "Uploading: $f -> ${target_name}"
+        curl --fail --silent --show-error \
+          --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+          --upload-file "$f" \
+          "${REGISTRY_URL}/${target_name}"
+        upload_count=$((upload_count + 1))
+      done
+
+      if [ "$upload_count" -eq 0 ]; then
+        echo "ERROR: No SPDX/SBOM files found under build/tmp*/deploy/images/*/*.spdx.json."
+        exit 1
+      fi
+      echo "Uploaded ${upload_count} file(s), skipped ${skipped_count} symlink(s)."

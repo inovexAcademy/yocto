@@ -1,0 +1,231 @@
+# ===========================================================================
+# Generic VulnScout scan template
+#
+# Expects SBOM pairs to already be present in ${SBOM_DOWNLOAD_DIR}. How they
+# get there is up to the extending job (registry download, build artifacts,
+# ...) - only the before_script differs, the scan logic below stays generic.
+# ===========================================================================
+.scan_vulnscout:
+  stage: cve_scan
+  tags:
+    - yocto-ics
+  image:
+    name: sflinux/vulnscout:v0.18
+    entrypoint: [""]
+  variables:
+    PROJECT_NAME: $CI_PROJECT_NAME
+    VARIANT_NAME: default
+    OUTPUTS_ROOT: $CI_PROJECT_DIR/vulnscout-outputs
+    OUTPUTS_DIR: $CI_PROJECT_DIR/vulnscout-outputs
+    VULNSCOUT_OUTPUTS_DIR: $CI_PROJECT_DIR/vulnscout-outputs
+    NVD_API_KEY: $NVDCVE_API_KEY
+    # Default location where SBOM pairs to be scanned are expected.
+    # Extending jobs may override this if they fetch SBOMs elsewhere.
+    SBOM_DOWNLOAD_DIR: "${CI_PROJECT_DIR}/sboms"
+  cache:
+    key: vulnscout-vulnerability-db
+    paths:
+      - .vulnscout-cache/
+  before_script:
+    - mkdir -p "$OUTPUTS_ROOT"
+    - mkdir -p "$CI_PROJECT_DIR/.vulnscout-cache"
+    # Symlink VulnScout's internal cache folder to the GitLab runner workspace folder
+    # so that downloaded vulnerability databases persist across pipeline runs:
+    - rm -rf /cache/vulnscout
+    - ln -s "$CI_PROJECT_DIR/.vulnscout-cache" /cache/vulnscout
+  script:
+    - echo "Starting standalone VulnScout scan for project '${PROJECT_NAME}'..."
+    - |
+      set -eu
+      # One full scan cycle PER image variant. VulnScout organises results by
+      # project + variant, so every image must get its own variant - otherwise
+      # multiple images collapse into a single variant and their findings get
+      # mixed up. The base VARIANT_NAME (e.g. the release version) is suffixed
+      # with the image identifier, which is the unique Yocto SPDX base name
+      # (image + machine).
+      #
+      # COUPLING NOTE: pairing relies on the ".spdx.json" /
+      # ".sbom-cve-check.spdx.json" suffixes created by .publish_sbom.
+      cd "${SBOM_DOWNLOAD_DIR}"
+      pair_count=0
+      for spdx in *.spdx.json; do
+        [ -e "$spdx" ] || continue
+        case "$spdx" in
+          *.sbom-cve-check.spdx.json) continue ;;
+        esac
+        cve_check_file="${spdx%.spdx.json}.sbom-cve-check.spdx.json"
+        if [ ! -e "$cve_check_file" ]; then
+          echo "WARNING: No matching sbom-cve-check file found for ${spdx}, skipping."
+          continue
+        fi
+
+        # Derive a stable image identifier from the SBOM file name by dropping
+        # the build timestamp and the ".rootfs" marker, e.g.
+        #   training-image-raspberrypi3-64.rootfs-20260723110027.spdx.json
+        #   -> training-image-raspberrypi3-64
+        # Keeping it timestamp-free means the VulnScout project stays the same
+        # across rebuilds of the same image.
+        image_id=$(printf '%s' "${spdx%.spdx.json}" | sed -E 's/-[0-9]{14}$//; s/\.rootfs$//')
+
+        project="${PROJECT_NAME}-${image_id}"
+        image_out="${OUTPUTS_ROOT}/${image_id}"
+        mkdir -p "$image_out"
+        # Re-point the output location for this image. Both variables are set
+        # because VulnScout has been observed to read either one.
+        export OUTPUTS_DIR="$image_out"
+        export VULNSCOUT_OUTPUTS_DIR="$image_out"
+
+        echo "=== Scanning image '${image_id}' ==="
+        echo "Project: ${project} | Variant: ${VARIANT_NAME}"
+        echo "Outputs: ${image_out}"
+        echo "SBOM pair: ${spdx} / ${cve_check_file}"
+
+        /scan/src/entrypoint.sh --project "${project}" --variant "${VARIANT_NAME}" \
+          --add-spdx "${SBOM_DOWNLOAD_DIR}/${spdx}" \
+          --add-cve-check "${SBOM_DOWNLOAD_DIR}/${cve_check_file}"
+
+        /scan/src/entrypoint.sh --project "${project}" --variant "${VARIANT_NAME}" --perform-nvd-scan
+        /scan/src/entrypoint.sh --project "${project}" --variant "${VARIANT_NAME}" --perform-osv-scan
+        /scan/src/entrypoint.sh --project "${project}" --variant "${VARIANT_NAME}" --perform-sbom-cve-check-scan
+
+        # Disabled: grype (excessive memory consumption)
+        #  /scan/src/entrypoint.sh --project "${project}" --variant "${VARIANT_NAME}" --variant "${variant}" --perform-grype-scan
+
+         /scan/src/entrypoint.sh --project "${project}" --variant "${VARIANT_NAME}" \
+          --export-spdx --export-cdx --export-openvex \
+          --report all_assessments.adoc \
+          --report match_condition.adoc \
+          --report summary.adoc \
+          --report time_estimates.csv \
+          --report vulnerabilities.csv \
+          --report vulnerability_summary.txt
+
+        pair_count=$((pair_count + 1))
+      done
+
+      if [ "$pair_count" -eq 0 ]; then
+        echo "ERROR: No valid SBOM pairs found in ${SBOM_DOWNLOAD_DIR}."
+        exit 1
+      fi
+
+      echo "Scanned ${pair_count} image(s) in total."
+      echo "Output tree:"
+      ls -1 "${OUTPUTS_ROOT}"
+
+  artifacts:
+    expire_in: 90 days
+    when: always
+    paths:
+      - vulnscout-outputs/
+
+# ---------------------------------------------------------------------------
+# cve_scan template: downloads all SBOMs for a release from the Generic
+# Package Registry (with explicit API pagination) and hands them to the
+# generic .scan_vulnscout logic.
+#
+# SCHEDULING: this job never triggers itself. The weekly cadence is provided
+# by a configured GitLab Pipeline Schedule (CI/CD -> Schedules), e.g. a cron
+# of "0 3 * * 6" for every Saturday at 03:00. The rules below only make the
+# job eligible when such a scheduled pipeline runs (or when started manually).
+# It is intentionally NOT triggered on tag pipelines: with "needs: []" it
+# would start before publish_sbom has uploaded the SBOMs (race condition).
+# ---------------------------------------------------------------------------
+.cve_scan:
+  extends: .scan_vulnscout
+  # We do not need a build job here, we download the SBOMs from the registry,
+  # so the scan runs fully independent of any prior build.
+  needs: []
+  rules:
+    # Weekly re-scan of released images, driven by the pipeline schedule.
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: always
+    # On-demand manual run.
+    - when: manual
+      allow_failure: true
+  variables:
+    VARIANT_NAME: $TARGET_RELEASE_VERSION
+    # PACKAGE_NAME is provided by the device template.
+    PACKAGES_API_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages"
+    # SBOM_DOWNLOAD_DIR is inherited from .scan_vulnscout.
+  before_script:
+    # Run the parent before_script (output dirs, cache setup, GOMEMLIMIT).
+    - !reference [.scan_vulnscout, before_script]
+
+    # Ensure curl + jq are available. Do NOT swallow failure with "|| true":
+    # verify explicitly afterwards and abort with a clear message otherwise.
+    - |
+      set -e
+      apk add --no-cache curl jq \
+        || echo "Package install step failed, will verify tools next."
+    - |
+      set -e
+      command -v curl >/dev/null 2>&1 || { echo "ERROR: curl is not available."; exit 1; }
+      command -v jq   >/dev/null 2>&1 || { echo "ERROR: jq is not available."; exit 1; }
+
+    - mkdir -p "${SBOM_DOWNLOAD_DIR}"
+
+    - |
+      set -eo pipefail
+
+      # -----------------------------------------------------------------
+      # paginate <list-endpoint-url>
+      # Walks all pages of a GitLab API list endpoint using the
+      # X-Next-Page response header and prints every array element as one
+      # compact JSON object per line.
+      # -----------------------------------------------------------------
+      paginate() {
+        base_url="$1"
+        case "$base_url" in
+          *\?*) sep="&" ;;
+          *)    sep="?" ;;
+        esac
+        page=1
+        while : ; do
+          headers_file=$(mktemp)
+          body=$(curl --fail --silent --show-error \
+            --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+            --dump-header "$headers_file" \
+            "${base_url}${sep}per_page=100&page=${page}")
+          printf '%s' "$body" | jq -c '.[]'
+          # GitLab returns the next page number here, or empty on the last page.
+          next=$(awk 'tolower($1) == "x-next-page:" { gsub(/\r/,"",$2); print $2 }' "$headers_file")
+          rm -f "$headers_file"
+          [ -n "$next" ] || break
+          page="$next"
+        done
+      }
+
+      echo "Looking up package '${PACKAGE_NAME}' version '${TARGET_RELEASE_VERSION}'..."
+      # jq -s slurps the streamed objects into an array so we can pick the
+      # first match without a SIGPIPE-prone "head".
+      package_id=$(paginate "${PACKAGES_API_URL}?package_name=${PACKAGE_NAME}&package_version=${TARGET_RELEASE_VERSION}" \
+        | jq -rs --arg name "$PACKAGE_NAME" --arg ver "$TARGET_RELEASE_VERSION" \
+            '[.[] | select(.name==$name and .version==$ver)] | .[0].id // empty')
+
+      if [ -z "$package_id" ]; then
+        echo "ERROR: No package '${PACKAGE_NAME}' found for version '${TARGET_RELEASE_VERSION}'."
+        exit 1
+      fi
+      echo "Found package_id: ${package_id}"
+
+      echo "Fetching file list for this release (paginated)..."
+      paginate "${PACKAGES_API_URL}/${package_id}/package_files" \
+        | jq -r '.file_name' \
+        | sort -u > "${SBOM_DOWNLOAD_DIR}/.file_list"
+
+      if [ ! -s "${SBOM_DOWNLOAD_DIR}/.file_list" ]; then
+        echo "ERROR: No files registered for package_id ${package_id}."
+        exit 1
+      fi
+      echo "Found files:"
+      cat "${SBOM_DOWNLOAD_DIR}/.file_list"
+
+      while IFS= read -r fname; do
+        [ -n "$fname" ] || continue
+        echo "Downloading ${fname}..."
+        curl --fail --silent --show-error \
+          --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
+          "${PACKAGES_API_URL}/generic/${PACKAGE_NAME}/${TARGET_RELEASE_VERSION}/${fname}" \
+          --output "${SBOM_DOWNLOAD_DIR}/${fname}"
+      done < "${SBOM_DOWNLOAD_DIR}/.file_list"
+      echo "Download complete."

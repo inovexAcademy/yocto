@@ -1,0 +1,49 @@
+# ===========================================================================
+# Device definition + concrete jobs - Raspberry Pi 3
+#
+# To onboard a new device, copy this file to ci/devices-<id>.yml, adjust the
+# .device_<id> variables and the job names, and add an include line for it in
+# the root .gitlab-ci.yml. The template files stay untouched.
+# ===========================================================================
+
+.device_rpi3:
+  variables:
+    DEVICE_ID:        "rpi3"
+    DEVICE_BASE_YAML: "raspberrypi3.yml"
+    PROJECT_NAME:     "rpi3"
+    PACKAGE_NAME:     "rpi3-sboms"
+
+build_rpi3_debug:
+  extends: [.build_debug, .device_rpi3]
+
+build_rpi3_release:
+  extends: [.build_release, .device_rpi3]
+
+publish_rpi3_sbom:
+  extends: [.publish_sbom, .device_rpi3]
+  needs:
+    - job: build_rpi3_release
+      artifacts: true
+
+cve_scan_rpi3:
+  extends: [.cve_scan, .device_rpi3]
+  # -------------------------------------------------------------------------
+  # Curated list of actively maintained releases that are still deployed in
+  # the field and therefore require weekly re-scanning. GitLab spawns one job
+  # instance per entry.
+  #
+  # Keep this list curated: remove a release once it is confirmed EOL / no
+  # longer deployed, so scan effort does not grow unbounded with every tag
+  # ever created. Tags remain in Git forever - presence of a tag does NOT
+  # imply it needs scanning.
+  #
+  # When changing this list, state the reason in the commit message, e.g.:
+  #   "add v1.3.0 (GA 2026-07)"
+  #   "drop v1.0.0 (EOL, last field unit recalled 2026-03)"
+  # -------------------------------------------------------------------------
+  parallel:
+    matrix:
+      - TARGET_RELEASE_VERSION:
+          - "v0.0.1"    # pilot batch, still in field
+          # - "v1.1.0"  # (example) superseded by v1.2.0 via OTA 2026-05
+          # - "v1.2.0"  # (example) current GA
