@@ -14,6 +14,7 @@ include:
   - local: 'ci/templates/build-yocto.yml'
   - local: 'ci/templates/publish-sbom.yml'
   - local: 'ci/templates/vulnscout-scan.yml'
-  - local: 'ci/devices/rpi3.yml'
+  - local: 'ci/devices/qemu.yml'
+  # - local: 'ci/devices/rpi3.yml'
   # - local: 'ci/devices/rpi4.yml'
 
