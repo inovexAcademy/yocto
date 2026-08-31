@@ -3,7 +3,7 @@ stages:
   - sign
 
 .setup_build:
-    image: ghcr.io/siemens/kas/kas:5.2
+    image: ghcr.io/siemens/kas/kas:5.4
     tags:
         - yocto-ics
     artifacts:
