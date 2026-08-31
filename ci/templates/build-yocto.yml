@@ -1,0 +1,88 @@
+# ===========================================================================
+# Generic build templates
+# ===========================================================================
+
+.setup_build:
+    image: ghcr.io/siemens/kas/kas:5.4
+    tags:
+        - yocto-ics
+    artifacts:
+        expire_in: 3 months
+        paths:
+            # tmp* instead of tmp-glibc, so this also works with e.g. tmp-musl/tmp etc.
+            # Not every device produces every image type - GitLab logs a harmless
+            # "no matching files" warning for the ones a given build does not emit.
+            - build/tmp*/deploy/images/*/*.sdimg
+            - build/tmp*/deploy/images/*/*.mender
+            - build/tmp*/deploy/images/*/*.wic*
+            - build/tmp*/deploy/images/*/*qemuboot.conf
+            - build/tmp*/deploy/images/*/*.ext4*
+            - build/tmp*/deploy/images/*/*.spdx*
+
+.build_yocto:
+    extends: .setup_build
+    stage: build
+    script:
+        - echo "Starting KAS Yocto build"
+
+        # checkout layers depending on the device configuration
+        - kas checkout config/${DEVICE_YAML}
+
+        # Stamp the Yocto release identifier into config/base.yml
+        # (placeholder token: YOCTO_RELEASE).
+        #   - Tag pipelines:  "<release line>-<tag>"    e.g. "wrynose-v1.2.0"
+        #   - Branch / MR:    "<release line>-<branch>-<timestamp>"
+        # The release line is read from config/base.yml's defaults.repos.branch,
+        # which is guaranteed to be present. Read it BEFORE the sed below
+        # replaces the placeholder.
+        - |
+          set -eu
+          release_line=$(python3 -c 'import yaml; print((yaml.safe_load(open("config/base.yml")) or {}).get("defaults",{}).get("repos",{}).get("branch",""))')
+
+          if [ -z "$release_line" ]; then
+            echo "ERROR: could not read defaults.repos.branch from config/base.yml."
+            exit 1
+          fi
+
+          if [ -n "${CI_COMMIT_TAG:-}" ]; then
+            version_string="${release_line}-${CI_COMMIT_TAG}"
+          else
+            version_string="${release_line}-${CI_COMMIT_REF_SLUG}-${CI_JOB_STARTED_AT}"
+          fi
+          echo "Stamping Yocto release identifier: ${version_string}"
+          sed -i "s#YOCTO_RELEASE#${version_string}#" config/base.yml
+
+        # Start actual build
+        - kas build config/${DEVICE_YAML}
+        - echo "Yocto build finished."
+
+# Debug builds: run on non-tag pipelines (or manually), use the shared
+# sstate cache, and append the debug config fragment to the device YAML.
+# DEVICE_BASE_YAML is provided by the device template and expanded by GitLab.
+.build_debug:
+  extends: .build_yocto
+  cache:
+    key: "yocto-sstate-${DEVICE_ID}"
+    paths:
+      - build/cache
+      - build/sstate-cache
+      - build/downloads
+  rules:
+    - if: $CI_COMMIT_TAG == null || $CI_COMMIT_TAG == ""
+    - when: manual
+      allow_failure: true
+  variables:
+    DEVICE_YAML: "${DEVICE_BASE_YAML}:config/debug.yml"
+
+# Release builds: run on tag pipelines (or manually), no sstate cache to
+# guarantee a clean, reproducible release build.
+.build_release:
+  extends: .build_yocto
+  cache: []
+  rules:
+    - if: $CI_COMMIT_TAG != null
+      when: always
+    - when: manual
+      allow_failure: true
+  variables:
+    DEVICE_YAML: "${DEVICE_BASE_YAML}"

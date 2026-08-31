@@ -1,76 +1,20 @@
 stages:
   - build
-  - sign
+  - publish_sbom
+  - cve_scan
 
-.setup_build:
-    image: ghcr.io/siemens/kas/kas:5.4
-    tags:
-        - yocto-ics
-    artifacts:
-        expire_in: 3 mos
-        paths:
-            - build/tmp*/deploy/images/*/*.sdimg
-            - build/tmp*/deploy/images/*/*.mender
-            - build/tmp*/deploy/images/*/*.spdx*
+# Global CI configuration is split across several files. This entrypoint only
+# defines the stage order and pulls in the pieces:
+#   - ci/templates/build-yocto.yml     : generic build templates (.setup_build, .build_*)
+#   - ci/templates/publish-sbom.yml    : SBOM publishing template (.publish_sbom)
+#   - ci/templates/vulnscout-scan.yml  : scan templates (.scan_vulnscout, .cve_scan)
+#   - ci/devices/<name>.yml            : per-device vars + concrete build/publish/scan jobs
 
-.build_yocto:
-    extends: .setup_build
-
-    script:
-        - echo "Starting KAS Yocto build"
-
-        # checkout layers depending on the device configuration
-        - kas checkout config/${DEVICE_YAML}
-
-        # modify sources depending on build type
-        - sed -i "s#scarthgap-date#scarthgap-${CI_JOB_STARTED_AT}#" config/base.yml
-
-        # Start actual build
-        - kas build config/${DEVICE_YAML}
-        - echo "Yocto build finished."
-
-
-build_rpi3_debug:
-  extends: .build_yocto
-  stage: build
-  cache:
-      key: YOCTO_BUILD_CACHE
-      paths:
-          - build/cache
-          - build/sstate-cache
-  rules:
-      - if: $CI_COMMIT_TAG == null || $CI_COMMIT_TAG == ""
-      - when: manual
-        allow_failure: true
-
-  variables:
-    DEVICE_YAML:    "raspberrypi3.yml:config/debug.yml"
-
-build_rpi3_release:
-  extends: .build_yocto
-  stage: build
-  cache:
-      key: no_cache
-      paths:
-          - .do-not-cache
-  rules:
-    - if: $CI_COMMIT_TAG != null
-      when: always
-    - when: manual
-      allow_failure: true
-
-  variables:
-    DEVICE_YAML:    "raspberrypi3.yml"
-
-# sign_mender_artifact:
-#     image: ghcr.io/siemens/kas/kas:5.2
-#     tags:
-#         - yocto-ics
-#     stage: sign
-#     script:
-#         - sign/sign.sh "build/tmp/deploy/images" "${ARTIFACT_SIGN_KEY}"
-#     artifacts:
-#         expire_in: 1 mos
-#         paths:
-#             - sign/signed_output
+include:
+  - local: 'ci/templates/build-yocto.yml'
+  - local: 'ci/templates/publish-sbom.yml'
+  - local: 'ci/templates/vulnscout-scan.yml'
+  - local: 'ci/devices/qemu.yml'
+  # - local: 'ci/devices/rpi3.yml'
+  # - local: 'ci/devices/rpi4.yml'
 

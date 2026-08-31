@@ -1,0 +1,47 @@
+# ===========================================================================
+# Device definition + concrete jobs - QEMU
+#
+# To onboard a new device, copy this file to ci/devices-<id>.yml, adjust the
+# .device_<id> variables and the job names, and add an include line for it in
+# the root .gitlab-ci.yml. The template files stay untouched.
+# ===========================================================================
+
+.device_qemu:
+  variables:
+    DEVICE_ID:        "qemu"
+    DEVICE_BASE_YAML: "emu.yml"
+    PROJECT_NAME:     "qemu"
+    PACKAGE_NAME:     "qemu-sboms"
+
+build_qemu_debug:
+  extends: [.build_debug, .device_qemu]
+
+build_qemu_release:
+  extends: [.build_release, .device_qemu]
+
+publish_qemu_sbom:
+  extends: [.publish_sbom, .device_qemu]
+  needs:
+    - job: build_qemu_release
+      artifacts: true
+
+cve_scan_qemu:
+  extends: [.cve_scan, .device_qemu]
+  # -------------------------------------------------------------------------
+  # Curated list of actively maintained releases that are still deployed in
+  # the field and therefore require weekly re-scanning. GitLab spawns one job
+  # instance per entry.
+  #
+  # Keep this list curated: remove a release once it is confirmed EOL / no
+  # longer deployed, so scan effort does not grow unbounded with every tag
+  # ever created. Tags remain in Git forever - presence of a tag does NOT
+  # imply it needs scanning.
+  #
+  # When changing this list, state the reason in the commit message, e.g.:
+  #   "add v1.3.0 (GA 2026-07)"
+  #   "drop v1.0.0 (EOL, last field unit recalled 2026-03)"
+  # -------------------------------------------------------------------------
+  parallel:
+    matrix:
+      - TARGET_RELEASE_VERSION:
+          - "v0.0.1"    # testing
