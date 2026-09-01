@@ -9,6 +9,11 @@
     "workspaceMount": "source=${localWorkspaceFolder},target=/work,type=bind",
     "workspaceFolder": "/work",
     "remoteUser": "builder",
+    "updateRemoteUserUID": false,
+    "overrideCommand": false,
+    "runArgs": [
+        "--userns=keep-id"
+    ],
 
     "postCreateCommand": "kas checkout config/avenger96.yml && kas checkout config/emu-rpi4.yml && kas checkout config/emu.yml && kas checkout config/raspberrypi3.yml && kas checkout config/raspberrypi4cm.yml",
     "customizations": {

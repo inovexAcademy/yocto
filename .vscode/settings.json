@@ -1,6 +1,6 @@
 {
-	"dev.containers.dockerPath": "podman",
-  	"dev.containers.dockerComposePath": "podman-compose",
+    "dev.containers.dockerPath": "podman",
+    "dev.containers.dockerComposePath": "podman-compose",
     "python.autoComplete.extraPaths": [
         "${workspaceFolder}/layers/openembedded-core/bitbake/lib",
         "${workspaceFolder}/layers/openembedded-core/meta/lib"
@@ -10,13 +10,25 @@
         "${workspaceFolder}/layers/openembedded-core/meta/lib"
     ],
     "bitbake.loggingLevel": "info",
+    "bitbake.workingDirectory": "${workspaceFolder}",
     "bitbake.pathToBitbakeFolder": "${workspaceFolder}/layers/openembedded-core/bitbake",
+    "bitbake.pathToEnvScript": "${workspaceFolder}/layers/openembedded-core/oe-init-build-env",
     "bitbake.pathToBuildFolder": "${workspaceFolder}/build",
-    "bitbake.pathToEnvScript": "",
     "bitbake.shellEnv": {},
     "files.associations": {
         "*.conf": "bitbake",
         "*.inc": "bitbake"
+    },
+    // Prevent VS Code file watchers and indexers from freezing
+    // the dev container by scanning the massive Yocto build directory.
+    "files.watcherExclude": {
+        "**/build": true
+    },
+    "search.exclude": {
+        "**/build": true
+    },
+    "C_Cpp.files.exclude": {
+        "**/build": true
     },
     "bitbake.buildConfigurations": [
         {
