@@ -1,0 +1,21 @@
+header:
+  version: 18
+
+local_conf_header:
+  performance-conf: |
+    # Add a ssh server for easy data transfer between target system and host
+    IMAGE_FEATURES:append = "ssh-server-openssh"
+
+    # Optional: add for strace, gdb and debug symbols (e.g. used by perf, ftrace or Perfetto)
+    # Also possible: Annotate traces with symbols afterwards
+    IMAGE_FEATURES:append = " tools-debug dbg-pkgs"
+
+    # Install system performance measuring and tracing tools
+    # systemd-analyze is part of the systemd recipe
+    IMAGE_INSTALL:append = " sysstat procps perf perfetto systemd-analyze"
+
+    # Allow a writeable filesystem
+    IMAGE_FEATURES:remove = "read-only-rootfs"
+
+    # QEMU Slirp Network config for ssh
+    QB_SLIRP_OPT = "-netdev user,id=net0,hostfwd=tcp:0.0.0.0:2222-:22"

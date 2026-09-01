@@ -15,16 +15,16 @@
                 "training-image-debug"
             ]
         },
-        {
-            "label": "Build for Avenger96 with KAS (Debug Configuration, all enabled Image Variants)",
-            "type": "shell",
-            "command": "kas build config/avenger96.yml:config/debug.yml"
-        },
-        {
-            "label": "Clean Avenger96 Build with KAS",
-            "type": "shell",
-            "command": "kas clean config/avenger96.yml:config/debug.yml"
-        },
+        // {
+        //     "label": "Build for Avenger96 with KAS (Debug Configuration, all enabled Image Variants)",
+        //     "type": "shell",
+        //     "command": "kas build config/avenger96.yml:config/debug.yml"
+        // },
+        // {
+        //     "label": "Clean Avenger96 Build with KAS",
+        //     "type": "shell",
+        //     "command": "kas clean config/avenger96.yml:config/debug.yml"
+        // },
         {
             "label": "Build for QEMU64 with KAS (Debug Configuration, all enabled Image Variants)",
             "type": "shell",
@@ -39,6 +39,16 @@
             "label": "Run QEMU64 emulator with training-image (Previous Build Required!)",
             "type": "shell",
             "command": "kas shell config/emu.yml:config/debug.yml -c 'runqemu nographic slirp snapshot training-image'"
+        },
+        {
+            "label": "Performance: Build QEMU64 emulator image with performance tools",
+            "type": "shell",
+            "command": "kas build config/emu.yml:config/debug.yml:config/performance.yml"
+        },
+        {
+            "label": "Performance: Run QEMU64 emulator with training-image (Previous Build Required!)",
+            "type": "shell",
+            "command": "kas shell config/emu.yml:config/debug.yml:config/performance.yml -c 'runqemu nographic slirp snapshot training-image'"
         }
     ]
 }

@@ -12,29 +12,42 @@
     "bitbake.loggingLevel": "info",
     "bitbake.workingDirectory": "${workspaceFolder}",
     "bitbake.pathToBitbakeFolder": "${workspaceFolder}/layers/openembedded-core/bitbake",
-    "bitbake.pathToEnvScript": "${workspaceFolder}/layers/openembedded-core/oe-init-build-env",
     "bitbake.pathToBuildFolder": "${workspaceFolder}/build",
     "bitbake.shellEnv": {},
     "files.associations": {
         "*.conf": "bitbake",
         "*.inc": "bitbake"
     },
-    // Prevent VS Code file watchers and indexers from freezing
-    // the dev container by scanning the massive Yocto build directory.
     "files.watcherExclude": {
-        "**/build": true
+        "**/build/tmp*/**": true,
+        "**/build/sstate-cache/**": true,
+        "**/build/downloads/**": true,
+        "**/build/cache/**": true
     },
     "search.exclude": {
-        "**/build": true
+        "**/build/tmp*": true,
+        "**/build/sstate-cache": true,
+        "**/build/downloads": true
     },
     "C_Cpp.files.exclude": {
         "**/build": true
     },
+    "python.analysis.exclude": [
+        "**/build/tmp*/**",
+        "**/build/sstate-cache/**",
+        "**/build/downloads/**",
+        "**/build/cache/**",
+        "**/node_modules",
+        "**/__pycache__",
+        "**/.*"
+    ],
+    "python.analysis.indexing": false,
+    "python.analysis.diagnosticMode": "openFilesOnly",
     "bitbake.buildConfigurations": [
-        {
-            "name": "Avenger96",
-            "commandWrapper": "kas shell config/avenger96.yml:config/debug.yml -c"
-        },
+        // {
+        //     "name": "Avenger96",
+        //     "commandWrapper": "kas shell config/avenger96.yml:config/debug.yml -c"
+        // },
         {
             "name": "QEMU Arm64",
             "commandWrapper": "kas shell config/emu.yml:config/debug.yml -c"
