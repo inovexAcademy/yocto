@@ -11,11 +11,13 @@ defaults:
     branch: wrynose
 
 repos:
+  # meta-my-cool-layer:
+    # path: "layers/meta-my-cool-layer"
+
   meta-training:
     path: "layers/meta-training"
     layers:
       meta-training:
-        prio: 10
       meta-training-distro:
 
   meta-openembedded:
