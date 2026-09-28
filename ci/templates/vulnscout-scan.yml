@@ -10,7 +10,7 @@
   tags:
     - yocto-ics
   image:
-    name: sflinux/vulnscout:v0.18
+    name: sflinux/vulnscout:v0.22
     entrypoint: [""]
   variables:
     PROJECT_NAME: $CI_PROJECT_NAME
@@ -38,16 +38,15 @@
     - |
       set -eu
       # One full scan cycle PER image variant. VulnScout organises results by
-      # project + variant, so every image must get its own variant - otherwise
-      # multiple images collapse into a single variant and their findings get
-      # mixed up. The base VARIANT_NAME (e.g. the release version) is suffixed
-      # with the image identifier, which is the unique Yocto SPDX base name
-      # (image + machine).
+      # project + variant, so every image must get its own project - otherwise
+      # multiple images collapse into one and their findings get mixed up.
       #
       # COUPLING NOTE: pairing relies on the ".spdx.json" /
       # ".sbom-cve-check.spdx.json" suffixes created by .publish_sbom.
       cd "${SBOM_DOWNLOAD_DIR}"
       pair_count=0
+      failed_images=""
+      data_refreshed=false
       for spdx in *.spdx.json; do
         [ -e "$spdx" ] || continue
         case "$spdx" in
@@ -84,14 +83,21 @@
           --add-spdx "${SBOM_DOWNLOAD_DIR}/${spdx}" \
           --add-cve-check "${SBOM_DOWNLOAD_DIR}/${cve_check_file}"
 
+        # The vulnerability data lives in the shared cache and is not tied to
+        # a project, so refreshing it once (with the first image) is enough.
+        if [ "$data_refreshed" = false ]; then
+          /scan/src/entrypoint.sh --project "${project}" --variant "${VARIANT_NAME}" --refresh-vulnerability-data
+          data_refreshed=true
+        fi
+
         /scan/src/entrypoint.sh --project "${project}" --variant "${VARIANT_NAME}" --perform-nvd-scan
         /scan/src/entrypoint.sh --project "${project}" --variant "${VARIANT_NAME}" --perform-osv-scan
         /scan/src/entrypoint.sh --project "${project}" --variant "${VARIANT_NAME}" --perform-sbom-cve-check-scan
 
         # Disabled: grype (excessive memory consumption)
-        #  /scan/src/entrypoint.sh --project "${project}" --variant "${VARIANT_NAME}" --variant "${variant}" --perform-grype-scan
+        #  /scan/src/entrypoint.sh --project "${project}" --variant "${VARIANT_NAME}" --perform-grype-scan
 
-         /scan/src/entrypoint.sh --project "${project}" --variant "${VARIANT_NAME}" \
+        /scan/src/entrypoint.sh --project "${project}" --variant "${VARIANT_NAME}" \
           --export-spdx --export-cdx --export-openvex \
           --report all_assessments.adoc \
           --report match_condition.adoc \
@@ -99,6 +105,19 @@
           --report time_estimates.csv \
           --report vulnerabilities.csv \
           --report vulnerability_summary.txt
+
+        # Evaluate the fail condition only after reports and exports are
+        # written. "if !" suspends set -e for this call, so a failing image
+        # does not abort the scan of the remaining ones. The (potentially
+        # long) list of matching CVEs goes into a per-image log file.
+        if ! /scan/src/entrypoint.sh --project "${project}" --variant "${VARIANT_NAME}" \
+             --match-condition "((affected and cvss >= 9.0) or ((pending or affected) and cvss >= 7.0 and epss >= 50%))" > "${image_out}/fail_condition.log" 2>&1; then
+          match_count=$(grep -c 'triggered fail condition' "${image_out}/fail_condition.log" || true)
+          echo "FAIL: '${image_id}' - ${match_count} finding(s) match the fail condition (see ${image_id}/fail_condition.log)."
+          failed_images="${failed_images} ${image_id}"
+        else
+          echo "OK: '${image_id}' - no finding matches the fail condition."
+        fi
 
         pair_count=$((pair_count + 1))
       done
@@ -109,8 +128,12 @@
       fi
 
       echo "Scanned ${pair_count} image(s) in total."
-      echo "Output tree:"
       ls -1 "${OUTPUTS_ROOT}"
+
+      if [ -n "$failed_images" ]; then
+        echo "ERROR: Fail condition triggered for:${failed_images}"
+        exit 1
+      fi
 
   artifacts:
     expire_in: 90 days
@@ -148,7 +171,7 @@
     PACKAGES_API_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages"
     # SBOM_DOWNLOAD_DIR is inherited from .scan_vulnscout.
   before_script:
-    # Run the parent before_script (output dirs, cache setup, GOMEMLIMIT).
+    # Run the parent before_script (output dirs, cache setup).
     - !reference [.scan_vulnscout, before_script]
 
     # Ensure curl + jq are available. Do NOT swallow failure with "|| true":
