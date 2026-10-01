@@ -1,14 +1,17 @@
 # ===========================================================================
 # SBOM publishing template
 #
-# Uploads every SPDX/SBOM file produced by the release build to the project's
-# Generic Package Registry under ${PACKAGE_NAME}/${PACKAGE_VERSION}.
+# Uploads every SPDX/SBOM file and every VEX document produced by the release
+# build to the project's Generic Package Registry under
+# ${PACKAGE_NAME}/${PACKAGE_VERSION}.
 #
 # COUPLING NOTE: the file names created here are consumed 1:1 by the cve_scan
 # jobs. The SPDX <-> CVE-check pairing in cve_scan relies on the
 # ".spdx.json" / ".sbom-cve-check.spdx.json" suffixes being preserved, and the
 # SPDX base name is reused as the VulnScout variant identifier, so do NOT
 # rewrite the file names when changing the upload naming below.
+# VEX files (".vex.json") do not end in ".spdx.json" and therefore do not
+# interfere with that pairing.
 # ===========================================================================
 .publish_sbom:
   stage: publish_sbom
@@ -26,28 +29,40 @@
     # PACKAGE_NAME is provided by the device template.
     REGISTRY_URL: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${PACKAGE_NAME}/${PACKAGE_VERSION}"
   script:
-    - echo "Searching for SPDX/SBOM files under build/tmp*/deploy/images/*/..."
+    - echo "Searching for SPDX/SBOM/VEX files under build/tmp*/deploy/images/*/..."
     - |
       set -eu
-      # curl cannot expand shell wildcards, so we expand the glob ourselves
+      # curl cannot expand shell wildcards, so we expand the globs ourselves
       # in a for loop and upload every matching file individually.
       # "*.spdx.json" intentionally also matches "*.sbom-cve-check.spdx.json" -
-      # we want to upload all of these anyway.
+      # we want to upload all of these anyway. "*.vex.json" picks up the VEX
+      # documents.
       #
-      # The Yocto SPDX base name already encodes image + machine and is unique,
-      # so we upload it under its own name without any extra prefix. This base
-      # name is also what cve_scan uses as the VulnScout variant identifier.
+      # The Yocto base name already encodes image + machine and is unique,
+      # so we upload it under its own name without any extra prefix. The SPDX
+      # base name is also what cve_scan uses as the VulnScout variant identifier.
+
+      # 14-digit build timestamp as used in IMAGE_NAME (unquoted in case
+      # patterns below so that it is treated as a pattern, not a literal).
+      TS='[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'
+
       upload_count=0
+      vex_count=0
       skipped_count=0
-      for f in build/tmp*/deploy/images/*/*.spdx.json; do
+      for f in build/tmp*/deploy/images/*/*.spdx.json \
+               build/tmp*/deploy/images/*/*.vex.json; do
         [ -e "$f" ] || continue
         target_name="$(basename "$f")"
 
         case "$target_name" in
           # <...>-<14-digit timestamp>.spdx.json
-          *-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].spdx.json) ;;
+          *-$TS.spdx.json) ;;
           # <...>-<14-digit timestamp>.sbom-cve-check.spdx.json
-          *-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].sbom-cve-check.spdx.json) ;;
+          *-$TS.sbom-cve-check.spdx.json) ;;
+          # <...>-<14-digit timestamp>.vex.json
+          *-$TS.vex.json)
+            vex_count=$((vex_count + 1))
+            ;;
           *)
             echo "Skipping non-timestamped entry: ${target_name}"
             skipped_count=$((skipped_count + 1))
@@ -64,7 +79,10 @@
       done
 
       if [ "$upload_count" -eq 0 ]; then
-        echo "ERROR: No SPDX/SBOM files found under build/tmp*/deploy/images/*/*.spdx.json."
+        echo "ERROR: No SPDX/SBOM/VEX files found under build/tmp*/deploy/images/*/."
         exit 1
       fi
-      echo "Uploaded ${upload_count} file(s), skipped ${skipped_count} symlink(s)."
+      if [ "$vex_count" -eq 0 ]; then
+        echo "WARNING: No timestamped *.vex.json files found - is the vex class enabled (INHERIT += \"vex\")?"
+      fi
+      echo "Uploaded ${upload_count} file(s) (thereof ${vex_count} VEX), skipped ${skipped_count} symlink(s)."

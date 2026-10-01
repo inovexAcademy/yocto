@@ -18,6 +18,7 @@
             - build/tmp*/deploy/images/*/*qemuboot.conf
             - build/tmp*/deploy/images/*/*.ext4*
             - build/tmp*/deploy/images/*/*.spdx*
+            - build/tmp*/deploy/images/*/*.vex.json
 
 .build_yocto:
     extends: .setup_build

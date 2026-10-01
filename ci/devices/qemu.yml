@@ -45,3 +45,4 @@ cve_scan_qemu:
     matrix:
       - TARGET_RELEASE_VERSION:
           - "v0.0.1"    # testing
+          - "v0.0.2"    # testing

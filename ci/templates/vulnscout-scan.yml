@@ -4,6 +4,11 @@
 # Expects SBOM pairs to already be present in ${SBOM_DOWNLOAD_DIR}. How they
 # get there is up to the extending job (registry download, build artifacts,
 # ...) - only the before_script differs, the scan logic below stays generic.
+#
+# Inputs per image:
+#   <base>.spdx.json                 (mandatory)
+#   <base>.sbom-cve-check.spdx.json  (mandatory)
+#   <base>.vex.json                  (optional, Yocto vex.bbclass output)
 # ===========================================================================
 .scan_vulnscout:
   stage: cve_scan
@@ -42,9 +47,12 @@
       # multiple images collapse into one and their findings get mixed up.
       #
       # COUPLING NOTE: pairing relies on the ".spdx.json" /
-      # ".sbom-cve-check.spdx.json" suffixes created by .publish_sbom.
+      # ".sbom-cve-check.spdx.json" / ".vex.json" suffixes created by
+      # .publish_sbom. The SPDX + sbom-cve-check pair is mandatory, the
+      # Yocto VEX file (vex.bbclass) is optional and added when present.
       cd "${SBOM_DOWNLOAD_DIR}"
       pair_count=0
+      vex_count=0
       failed_images=""
       data_refreshed=false
       for spdx in *.spdx.json; do
@@ -52,7 +60,9 @@
         case "$spdx" in
           *.sbom-cve-check.spdx.json) continue ;;
         esac
-        cve_check_file="${spdx%.spdx.json}.sbom-cve-check.spdx.json"
+        base="${spdx%.spdx.json}"
+        cve_check_file="${base}.sbom-cve-check.spdx.json"
+        vex_file="${base}.vex.json"
         if [ ! -e "$cve_check_file" ]; then
           echo "WARNING: No matching sbom-cve-check file found for ${spdx}, skipping."
           continue
@@ -64,7 +74,7 @@
         #   -> training-image-raspberrypi3-64
         # Keeping it timestamp-free means the VulnScout project stays the same
         # across rebuilds of the same image.
-        image_id=$(printf '%s' "${spdx%.spdx.json}" | sed -E 's/-[0-9]{14}$//; s/\.rootfs$//')
+        image_id=$(printf '%s' "$base" | sed -E 's/-[0-9]{14}$//; s/\.rootfs$//')
 
         project="${PROJECT_NAME}-${image_id}"
         image_out="${OUTPUTS_ROOT}/${image_id}"
@@ -74,14 +84,25 @@
         export OUTPUTS_DIR="$image_out"
         export VULNSCOUT_OUTPUTS_DIR="$image_out"
 
+        # Build the input argument list. The positional parameters are free to
+        # use here (no function context), "$@" keeps paths safely quoted.
+        set -- --add-spdx "${SBOM_DOWNLOAD_DIR}/${spdx}" \
+               --add-cve-check "${SBOM_DOWNLOAD_DIR}/${cve_check_file}"
+        if [ -e "$vex_file" ]; then
+          set -- "$@" --add-yocto-vex "${SBOM_DOWNLOAD_DIR}/${vex_file}"
+          vex_count=$((vex_count + 1))
+          inputs_desc="${spdx} / ${cve_check_file} / ${vex_file}"
+        else
+          echo "WARNING: No matching VEX file (${vex_file}) for ${spdx}, scanning without it."
+          inputs_desc="${spdx} / ${cve_check_file}"
+        fi
+
         echo "=== Scanning image '${image_id}' ==="
         echo "Project: ${project} | Variant: ${VARIANT_NAME}"
         echo "Outputs: ${image_out}"
-        echo "SBOM pair: ${spdx} / ${cve_check_file}"
+        echo "Inputs: ${inputs_desc}"
 
-        /scan/src/entrypoint.sh --project "${project}" --variant "${VARIANT_NAME}" \
-          --add-spdx "${SBOM_DOWNLOAD_DIR}/${spdx}" \
-          --add-cve-check "${SBOM_DOWNLOAD_DIR}/${cve_check_file}"
+        /scan/src/entrypoint.sh --project "${project}" --variant "${VARIANT_NAME}" "$@"
 
         # The vulnerability data lives in the shared cache and is not tied to
         # a project, so refreshing it once (with the first image) is enough.
@@ -127,7 +148,7 @@
         exit 1
       fi
 
-      echo "Scanned ${pair_count} image(s) in total."
+      echo "Scanned ${pair_count} image(s) in total (${vex_count} with Yocto VEX input)."
       ls -1 "${OUTPUTS_ROOT}"
 
       if [ -n "$failed_images" ]; then
@@ -142,9 +163,9 @@
       - vulnscout-outputs/
 
 # ---------------------------------------------------------------------------
-# cve_scan template: downloads all SBOMs for a release from the Generic
-# Package Registry (with explicit API pagination) and hands them to the
-# generic .scan_vulnscout logic.
+# cve_scan template: downloads all SBOMs (incl. optional VEX files) for a
+# release from the Generic Package Registry (with explicit API pagination)
+# and hands them to the generic .scan_vulnscout logic.
 #
 # SCHEDULING: this job never triggers itself. The weekly cadence is provided
 # by a configured GitLab Pipeline Schedule (CI/CD -> Schedules), e.g. a cron
@@ -232,6 +253,8 @@
       echo "Found package_id: ${package_id}"
 
       echo "Fetching file list for this release (paginated)..."
+      # All package files are downloaded, so the optional *.vex.json files
+      # published by .publish_sbom are picked up here as well.
       paginate "${PACKAGES_API_URL}/${package_id}/package_files" \
         | jq -r '.file_name' \
         | sort -u > "${SBOM_DOWNLOAD_DIR}/.file_list"
